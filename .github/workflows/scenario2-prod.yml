@@ -1,0 +1,24 @@
+name: Scenario 2 - Main Branch Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  deploy-to-prod:
+    uses: ./.github/workflows/terraform-reusable.yml
+    with:
+      environment: 'prod'
+      tf_action: 'apply'
+      working_directory: '.'
+    secrets:
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME_PROD }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      S3_KEY_PREFIX: ${{ secrets.S3_KEY_PREFIX }}

@@ -1,0 +1,24 @@
+name: Scenario 2 - Test Branch Deployment
+
+on:
+  push:
+    branches:
+      - 'test/**'
+    paths:
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  deploy-to-test:
+    uses: ./.github/workflows/terraform-reusable.yml
+    with:
+      environment: 'test'
+      tf_action: 'apply'
+      working_directory: '.'
+    secrets:
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME_TEST }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      S3_KEY_PREFIX: ${{ secrets.S3_KEY_PREFIX }}

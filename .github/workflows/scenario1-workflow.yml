@@ -1,0 +1,49 @@
+name: Scenario 1 - Main to Dev, Manual for Test/Prod
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '.github/workflows/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - prod
+
+jobs:
+  # For pushes to main, always deploy to dev
+  deploy-to-dev:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/terraform-reusable.yml
+    with:
+      environment: 'dev'
+      tf_action: 'apply'
+      working_directory: '.'
+    secrets:
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      S3_KEY_PREFIX: ${{ secrets.S3_KEY_PREFIX }}
+
+  # For manual workflow dispatch, deploy to the selected environment
+  deploy-to-selected:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/terraform-reusable.yml
+    with:
+      environment: ${{ github.event.inputs.environment }}
+      tf_action: 'apply'
+      working_directory: '.'
+    secrets:
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      S3_KEY_PREFIX: ${{ secrets.S3_KEY_PREFIX }}

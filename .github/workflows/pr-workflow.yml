@@ -1,0 +1,189 @@
+name: Pull Request Workflow
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'dev/**'
+      - 'test/**'
+    paths:
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '.github/workflows/**'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  security-scan:
+    name: 'Security Scan'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Run Checkov
+        id: checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: terraform
+          output_format: github_failed_only
+          soft_fail: true
+
+      - name: Post Checkov Results
+        uses: actions/github-script@v6
+        if: always()
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `### Checkov Security Scan Results 🔍
+            
+            ${{ steps.checkov.outputs.results }}
+            
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+  terraform-tests:
+    name: 'Terraform Tests'
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.11.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-session-name: GitHubActions
+
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.S3_BUCKET_NAME }}-${{ secrets.AWS_REGION }}" \
+            -backend-config="key=${{ secrets.S3_KEY_PREFIX }}/dev/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Run Terraform Tests
+        id: test
+        run: terraform test
+        continue-on-error: true
+
+      - name: Post Test Results
+        uses: actions/github-script@v6
+        if: always()
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `### Terraform Tests Results ✅
+            
+            Status: \`${{ steps.test.outcome }}\`
+            
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+  terraform-plan:
+    name: 'Terraform Plan'
+    runs-on: ubuntu-latest
+    needs: [security-scan, terraform-tests]
+    # Determine environment based on the branch being targeted in the PR
+    env:
+      PR_ENVIRONMENT: ${{ github.base_ref == 'main' && 'prod' || github.base_ref == 'test' && 'test' || 'dev' }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.11.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-session-name: GitHubActions
+
+      - name: Terraform Format
+        id: fmt
+        run: terraform fmt -check
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.S3_BUCKET_NAME }}-${{ secrets.AWS_REGION }}" \
+            -backend-config="key=${{ secrets.S3_KEY_PREFIX }}/${{ env.PR_ENVIRONMENT }}/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -var-file=environments/${{ env.PR_ENVIRONMENT }}/terraform.tfvars -no-color -input=false
+        continue-on-error: true
+
+      - name: Update Pull Request
+        uses: actions/github-script@v6
+        if: always()
+        env:
+          PLAN: "${{ steps.plan.outputs.stdout }}"
+          FORMAT_RESULT: "${{ steps.fmt.outcome }}"
+          INIT_RESULT: "${{ steps.init.outcome }}"
+          VALIDATE_RESULT: "${{ steps.validate.outcome }}"
+          PLAN_RESULT: "${{ steps.plan.outcome }}"
+          PR_ENV: "${{ env.PR_ENVIRONMENT }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `### Terraform Plan for \`${process.env.PR_ENV}\` Environment 📖
+            
+            #### Terraform Format and Style 🖌\`${process.env.FORMAT_RESULT}\`
+            #### Terraform Initialization ⚙️\`${process.env.INIT_RESULT}\`
+            #### Terraform Validation 🤖\`${process.env.VALIDATE_RESULT}\`
+            #### Terraform Plan 📖\`${process.env.PLAN_RESULT}\`
+            
+            <details><summary>Show Plan</summary>
+            
+            \`\`\`terraform
+            ${process.env.PLAN}
+            \`\`\`
+            
+            </details>
+            
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })

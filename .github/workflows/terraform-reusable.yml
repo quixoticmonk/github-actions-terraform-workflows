@@ -1,0 +1,104 @@
+name: Reusable Terraform Workflow
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to deploy to (dev, test, prod)'
+        required: true
+        type: string
+      tf_action:
+        description: 'Terraform action to perform (plan, apply)'
+        required: true
+        type: string
+        default: 'plan'
+      working_directory:
+        description: 'Directory containing Terraform files'
+        required: false
+        type: string
+        default: '.'
+    secrets:
+      AWS_ROLE_TO_ASSUME:
+        required: true
+      AWS_REGION:
+        required: true
+      S3_BUCKET_NAME:
+        required: true
+      S3_KEY_PREFIX:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    env:
+      TF_VAR_FILE: environments/${{ inputs.environment }}/terraform.tfvars
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.11.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-session-name: GitHubActions
+
+      - name: Terraform Format
+        id: fmt
+        run: terraform fmt -check
+        working-directory: ${{ inputs.working_directory }}
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.S3_BUCKET_NAME }}-${{ secrets.AWS_REGION }}" \
+            -backend-config="key=${{ secrets.S3_KEY_PREFIX }}/${{ inputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+        working-directory: ${{ inputs.working_directory }}
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+        working-directory: ${{ inputs.working_directory }}
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -var-file=${{ env.TF_VAR_FILE }} -no-color -input=false -out=tfplan
+        working-directory: ${{ inputs.working_directory }}
+        continue-on-error: true
+
+      - name: Store Plan Output
+        id: store_plan
+        run: |
+          PLAN_OUTPUT=$(terraform show -no-color tfplan)
+          echo "PLAN_OUTPUT<<EOF" >> $GITHUB_ENV
+          echo "$PLAN_OUTPUT" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+        working-directory: ${{ inputs.working_directory }}
+        if: inputs.tf_action == 'plan' || github.event_name == 'pull_request'
+
+      - name: Terraform Apply
+        if: inputs.tf_action == 'apply'
+        run: terraform apply -var-file=${{ env.TF_VAR_FILE }} -auto-approve -input=false
+        working-directory: ${{ inputs.working_directory }}
+
+      - name: Plan Output
+        id: plan_output
+        run: echo "${{ env.PLAN_OUTPUT }}"
+        if: inputs.tf_action == 'plan' || github.event_name == 'pull_request'
