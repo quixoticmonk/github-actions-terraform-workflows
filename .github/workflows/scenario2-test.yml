@@ -3,7 +3,7 @@ name: Scenario 2 - Test Branch Deployment
 on:
   push:
     branches:
-      - 'test/**'
+      - 'test'
     paths:
       - '**/*.tf'
       - '**/*.tfvars'

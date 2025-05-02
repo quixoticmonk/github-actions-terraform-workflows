@@ -23,6 +23,16 @@ resource "awscc_s3_bucket" "this" {
 
 }
 
+resource "awscc_s3_bucket" "that" {
+  bucket_name = "${var.bucket_name_prefix}2-${var.environment}-${var.aws_region}"
+
+  tags = [{
+    key   = "Modified By"
+    value = "AWSCC"
+  }]
+
+}
+
 # Optional bucket policy based on environment
 resource "awscc_s3_bucket_policy" "this" {
   bucket = awscc_s3_bucket.this.id
