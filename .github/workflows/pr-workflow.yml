@@ -16,11 +16,16 @@ permissions:
   id-token: write
   contents: read
   pull-requests: write
+  actions: read
 
 jobs:
   security-scan:
     name: 'Security Scan'
     runs-on: ubuntu-latest
+    outputs:
+      checkov_status: ${{ steps.checkov.outcome }}
+      checkov_failed_checks: ${{ steps.extract_results.outputs.failed_checks }}
+      checkov_passed_checks: ${{ steps.extract_results.outputs.passed_checks }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -40,7 +45,7 @@ jobs:
           output_format: cli,sarif
           output_file_path: console,results.sarif
       - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         
         # Results are generated only on a success or failure
         # this is required since GitHub by default won't run the next step
@@ -50,6 +55,22 @@ jobs:
         if: success() || failure()
         with:
           sarif_file: results.sarif   
+
+      - name: Extract Checkov Results
+        id: extract_results
+        if: always()
+        run: |
+          if [[ "${{ steps.checkov.outputs.results }}" =~ "failed checks: ([0-9]+)" ]]; then
+            echo "failed_checks=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          else
+            echo "failed_checks=0" >> $GITHUB_OUTPUT
+          fi
+          
+          if [[ "${{ steps.checkov.outputs.results }}" =~ "passed checks: ([0-9]+)" ]]; then
+            echo "passed_checks=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          else
+            echo "passed_checks=0" >> $GITHUB_OUTPUT
+          fi
 
       - name: Post Checkov Results
         uses: actions/github-script@v6
@@ -75,6 +96,8 @@ jobs:
     environment: dev
     runs-on: ubuntu-latest
     needs: security-scan
+    outputs:
+      test_status: ${{ steps.test.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -127,7 +150,12 @@ jobs:
     name: 'Terraform Plan'
     environment: dev
     runs-on: ubuntu-latest
-    needs: [security-scan, terraform-tests]    
+    needs: [security-scan, terraform-tests]
+    outputs:
+      format_status: ${{ steps.fmt.outcome }}
+      init_status: ${{ steps.init.outcome }}
+      validate_status: ${{ steps.validate.outcome }}
+      plan_status: ${{ steps.plan.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -202,3 +230,62 @@ jobs:
               repo: context.repo.repo,
               body: output
             })
+  summary-report:
+    name: 'Summary Report'
+    runs-on: ubuntu-latest
+    needs: [security-scan, terraform-tests, terraform-plan]
+    if: always()
+    steps:
+      - name: Create Summary Table
+        uses: actions/github-script@v6
+        if: always()
+        env:
+          CHECKOV_STATUS: ${{ needs.security-scan.outputs.checkov_status }}
+          CHECKOV_FAILED: ${{ needs.security-scan.outputs.checkov_failed_checks }}
+          CHECKOV_PASSED: ${{ needs.security-scan.outputs.checkov_passed_checks }}
+          TEST_STATUS: ${{ needs.terraform-tests.outputs.test_status }}
+          FORMAT_STATUS: ${{ needs.terraform-plan.outputs.format_status }}
+          INIT_STATUS: ${{ needs.terraform-plan.outputs.init_status }}
+          VALIDATE_STATUS: ${{ needs.terraform-plan.outputs.validate_status }}
+          PLAN_STATUS: ${{ needs.terraform-plan.outputs.plan_status }}
+        with:
+          script: |
+            // Create a status emoji based on the outcome
+            const getStatusEmoji = (status) => {
+              if (!status) return '❓';
+              switch(status.toLowerCase()) {
+                case 'success': return '✅';
+                case 'failure': return '❌';
+                case 'cancelled': return '⚠️';
+                case 'skipped': return '⏭️';
+                default: return '❓';
+              }
+            };
+            
+            // Create a summary table
+            const summary = `## Pull Request Workflow Summary
+            
+            | Check | Status | Details |
+            | ----- | ------ | ------- |
+            | Checkov Security Scan | ${getStatusEmoji(process.env.CHECKOV_STATUS)} | Passed: ${process.env.CHECKOV_PASSED}, Failed: ${process.env.CHECKOV_FAILED} |
+            | Terraform Tests | ${getStatusEmoji(process.env.TEST_STATUS)} | ${process.env.TEST_STATUS || 'N/A'} |
+            | Terraform Format | ${getStatusEmoji(process.env.FORMAT_STATUS)} | ${process.env.FORMAT_STATUS || 'N/A'} |
+            | Terraform Init | ${getStatusEmoji(process.env.INIT_STATUS)} | ${process.env.INIT_STATUS || 'N/A'} |
+            | Terraform Validate | ${getStatusEmoji(process.env.VALIDATE_STATUS)} | ${process.env.VALIDATE_STATUS || 'N/A'} |
+            | Terraform Plan | ${getStatusEmoji(process.env.PLAN_STATUS)} | ${process.env.PLAN_STATUS || 'N/A'} |
+            
+            *Generated at: ${new Date().toISOString()}*
+            `;
+            
+            // Write to the job summary
+            await core.summary
+              .addRaw(summary)
+              .write();
+              
+            // Also post as a comment
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
