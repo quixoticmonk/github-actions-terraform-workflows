@@ -28,7 +28,7 @@ jobs:
         uses: terraform-docs/gh-actions@v1.4.0
         with:
           working-dir: .
-          config-file: .config/.terraform-docs.yml
+          config-file: .config/.terraform-docs.yaml
           fail-on-diff: true       
       - name: Run Checkov
         id: checkov
