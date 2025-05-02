@@ -20,6 +20,11 @@ on:
           - test
           - prod
 
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
 jobs:
   # For pushes to main, always deploy to dev
   deploy-to-dev:
