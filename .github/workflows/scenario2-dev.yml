@@ -9,7 +9,11 @@ on:
       - '**/*.tfvars'
       - '.github/workflows/**'
   workflow_dispatch:
-
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  
 jobs:
   deploy-to-dev:
     uses: ./.github/workflows/terraform-reusable.yml
