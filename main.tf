@@ -16,10 +16,10 @@ provider "awscc" {
 resource "awscc_s3_bucket" "this" {
   bucket_name = "${var.bucket_name_prefix}-${var.environment}-${var.aws_region}"
 
-  tags = {
+  tags = [{
     key   = "Modified By"
     value = "AWSCC"
-  }
+  }]
 
 }
 
