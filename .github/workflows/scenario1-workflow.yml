@@ -13,9 +13,10 @@ on:
       environment:
         description: 'Environment to deploy to'
         required: true
-        default: 'test'
+        default: 'dev'
         type: choice
         options:
+          - dev
           - test
           - prod
 
