@@ -7,6 +7,8 @@ terraform {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 provider "awscc" {
   region = var.aws_region
 }
@@ -34,7 +36,7 @@ resource "awscc_s3_bucket_policy" "this" {
         Effect = "Allow"
         Resource = "${awscc_s3_bucket.this.arn}/*"
         Principal = {
-          AWS = var.allowed_account_ids
+          AWS = [data.aws_caller_identity.current.account_id]
         }
       }
     ]
