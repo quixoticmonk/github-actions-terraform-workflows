@@ -44,6 +44,7 @@ jobs:
           soft_fail: true
           output_format: cli,sarif
           output_file_path: console,results.sarif
+          external_checks_repos: https://github.com/quixoticmonk/checkov-awscc-custom-checks.git?ref=checks
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v3
         
@@ -60,17 +61,13 @@ jobs:
         id: extract_results
         if: always()
         run: |
-          if [[ "${{ steps.checkov.outputs.results }}" =~ "failed checks: ([0-9]+)" ]]; then
-            echo "failed_checks=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
-          else
-            echo "failed_checks=0" >> $GITHUB_OUTPUT
-          fi
+          # Extract failed checks count
+          FAILED_CHECKS=$(echo "${{ steps.checkov.outputs.results }}" | grep -o "Failed checks: [0-9]*" | head -1 | awk '{print $3}')
+          echo "failed_checks=${FAILED_CHECKS:-0}" >> $GITHUB_OUTPUT
           
-          if [[ "${{ steps.checkov.outputs.results }}" =~ "passed checks: ([0-9]+)" ]]; then
-            echo "passed_checks=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
-          else
-            echo "passed_checks=0" >> $GITHUB_OUTPUT
-          fi
+          # Extract passed checks count
+          PASSED_CHECKS=$(echo "${{ steps.checkov.outputs.results }}" | grep -o "Passed checks: [0-9]*" | head -1 | awk '{print $3}')
+          echo "passed_checks=${PASSED_CHECKS:-0}" >> $GITHUB_OUTPUT
 
       - name: Post Checkov Results
         uses: actions/github-script@v6

@@ -175,6 +175,7 @@ Modify the `terraform.tfvars` files in each environment directory to customize t
 
 | Name | Version |
 |------|---------|
+| <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
 | <a name="provider_awscc"></a> [awscc](#provider\_awscc) | ~> 1.0.0 |
 
 ## Modules
@@ -185,8 +186,10 @@ No modules.
 
 | Name | Type |
 |------|------|
+| [awscc_s3_bucket.that](https://registry.terraform.io/providers/hashicorp/awscc/latest/docs/resources/s3_bucket) | resource |
 | [awscc_s3_bucket.this](https://registry.terraform.io/providers/hashicorp/awscc/latest/docs/resources/s3_bucket) | resource |
 | [awscc_s3_bucket_policy.this](https://registry.terraform.io/providers/hashicorp/awscc/latest/docs/resources/s3_bucket_policy) | resource |
+| [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 
 ## Inputs
 
@@ -195,9 +198,7 @@ No modules.
 | <a name="input_allowed_account_ids"></a> [allowed\_account\_ids](#input\_allowed\_account\_ids) | List of AWS account IDs allowed to access the bucket | `list(string)` | `[]` | no |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region to deploy resources | `string` | `"us-east-1"` | no |
 | <a name="input_bucket_name_prefix"></a> [bucket\_name\_prefix](#input\_bucket\_name\_prefix) | Prefix for the S3 bucket name | `string` | `"terraform-demo"` | no |
-| <a name="input_common_tags"></a> [common\_tags](#input\_common\_tags) | Common tags to apply to all resources | `map(string)` | <pre>{<br/>  "ManagedBy": "Terraform",<br/>  "Project": "S3Deployment"<br/>}</pre> | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Environment name (dev, test, prod) | `string` | n/a | yes |
-| <a name="input_sns_topic_arn"></a> [sns\_topic\_arn](#input\_sns\_topic\_arn) | SNS Topic ARN for bucket notifications | `string` | `""` | no |
 
 ## Outputs
 
