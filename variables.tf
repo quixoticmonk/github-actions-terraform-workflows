@@ -19,23 +19,8 @@ variable "bucket_name_prefix" {
   default     = "terraform-demo"
 }
 
-variable "sns_topic_arn" {
-  description = "SNS Topic ARN for bucket notifications"
-  type        = string
-  default     = ""
-}
-
 variable "allowed_account_ids" {
   description = "List of AWS account IDs allowed to access the bucket"
   type        = list(string)
   default     = []
-}
-
-variable "common_tags" {
-  description = "Common tags to apply to all resources"
-  type        = map(string)
-  default = {
-    ManagedBy = "Terraform"
-    Project   = "S3Deployment"
-  }
 }
