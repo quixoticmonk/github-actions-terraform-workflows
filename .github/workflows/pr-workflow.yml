@@ -28,17 +28,28 @@ jobs:
         uses: terraform-docs/gh-actions@v1.4.0
         with:
           working-dir: .
-          config-file: .config/.terraform-docs.yaml
+          config-file: .terraform-docs.yml
           fail-on-diff: true       
       - name: Run Checkov
         id: checkov
-        uses: bridgecrewio/checkov-action@12
+        uses: bridgecrewio/checkov-action@v12
         with:
           directory: .
           framework: terraform
-          output_format: github_failed_only
           soft_fail: true
-   
+          output_format: cli,sarif
+          output_file_path: console,results.sarif
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v2
+        
+        # Results are generated only on a success or failure
+        # this is required since GitHub by default won't run the next step
+        # when the previous one has failed. Security checks that do not pass will 'fail'.
+        # An alternative is to add `continue-on-error: true` to the previous step
+        # Or 'soft_fail: true' to checkov.
+        if: success() || failure()
+        with:
+          sarif_file: results.sarif   
 
       - name: Post Checkov Results
         uses: actions/github-script@v6
@@ -61,6 +72,7 @@ jobs:
 
   terraform-tests:
     name: 'Terraform Tests'
+    environment: dev
     runs-on: ubuntu-latest
     needs: security-scan
     steps:
@@ -113,12 +125,9 @@ jobs:
 
   terraform-plan:
     name: 'Terraform Plan'
+    environment: dev
     runs-on: ubuntu-latest
-    needs: [security-scan, terraform-tests]
-    # Determine environment based on the branch being targeted in the PR
-    env:
-      PR_ENVIRONMENT: ${{ github.base_ref == 'main' && 'prod' || github.base_ref == 'test' && 'test' || 'dev' }}
-    
+    needs: [security-scan, terraform-tests]    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -145,7 +154,7 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.S3_BUCKET_NAME }}" \
-            -backend-config="key=${{ secrets.S3_KEY_PREFIX }}/${{ env.PR_ENVIRONMENT }}/terraform.tfstate" \
+            -backend-config="key=${{ secrets.S3_KEY_PREFIX }}/${{ inputs.environment }}/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
       - name: Terraform Validate
@@ -154,7 +163,7 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        run: terraform plan -var-file=environments/${{ env.PR_ENVIRONMENT }}/terraform.tfvars -no-color -input=false
+        run: terraform plan -var-file=environments/${{ inputs.environment  }}/terraform.tfvars -no-color -input=false -out=tfplan.json
         continue-on-error: true
 
       - name: Update Pull Request
@@ -166,7 +175,7 @@ jobs:
           INIT_RESULT: "${{ steps.init.outcome }}"
           VALIDATE_RESULT: "${{ steps.validate.outcome }}"
           PLAN_RESULT: "${{ steps.plan.outcome }}"
-          PR_ENV: "${{ env.PR_ENVIRONMENT }}"
+          PR_ENV: "${{ inputs.environment  }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -175,7 +184,7 @@ jobs:
             #### Terraform Format and Style 🖌\`${process.env.FORMAT_RESULT}\`
             #### Terraform Initialization ⚙️\`${process.env.INIT_RESULT}\`
             #### Terraform Validation 🤖\`${process.env.VALIDATE_RESULT}\`
-            #### Terraform Plan 📖\`${process.env.PLAN_RESULT}\`
+            #### Terraform Plan 📖\`${{steps.plan.outcome}}\`
             
             <details><summary>Show Plan</summary>
             
