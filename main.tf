@@ -23,6 +23,22 @@ resource "awscc_s3_bucket" "this" {
 
 }
 
+# Add VPC resource using AWSCC provider
+resource "awscc_ec2_vpc" "this" {
+  cidr_block = var.vpc_cidr_block
+  
+  tags = [{
+    key   = "Name"
+    value = "${var.environment}-vpc"
+  }, {
+    key   = "Environment"
+    value = var.environment
+  }, {
+    key   = "Modified By"
+    value = "AWSCC"
+  }]
+}
+
 # Optional bucket policy based on environment
 resource "awscc_s3_bucket_policy" "this" {
   bucket = awscc_s3_bucket.this.id

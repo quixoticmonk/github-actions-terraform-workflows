@@ -19,6 +19,12 @@ variable "bucket_name_prefix" {
   default     = "terraform-demo"
 }
 
+variable "vpc_cidr_block" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
 variable "allowed_account_ids" {
   description = "List of AWS account IDs allowed to access the bucket"
   type        = list(string)
