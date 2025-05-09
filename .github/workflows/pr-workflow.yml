@@ -49,16 +49,20 @@ jobs:
         id: checkov
         continue-on-error: true
         run: |
-          # Run checkov and capture the output
-          checkov -d . --framework terraform --soft-fail --output cli --output sarif --output-file-path results.sarif
-          # Store the exit code
+          # Run checkov with both CLI and SARIF output
+          checkov -d . --framework terraform --soft-fail \
+            --output cli \
+            --output sarif \
+            --output-file-path checkov_results.sarif | tee checkov_output.txt
+          
+          # Store exit code
           EXIT_CODE=$?
-          # Display the Checkov output in the logs and store it
-          checkov -d . --framework terraform --soft-fail --output cli | tee checkov_output.txt
+          
           # Save results to GITHUB_OUTPUT
           echo "results<<EOF" >> $GITHUB_OUTPUT
           cat checkov_output.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+          
           exit $EXIT_CODE
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v3
@@ -70,7 +74,7 @@ jobs:
         # Or 'soft_fail: true' to checkov.
         if: always()
         with:
-          sarif_file: results.sarif
+          sarif_file: checkov_results.sarif
           category: checkov   
 
       - name: Extract Checkov Results
