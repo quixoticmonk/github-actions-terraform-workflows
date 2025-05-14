@@ -35,7 +35,7 @@ permissions:
 jobs:
   terraform:
     name: 'Terraform'
-    runs-on: ubuntu-latest
+    runs-on: macOS-latest
     environment: ${{ inputs.environment }}
     
     env:
