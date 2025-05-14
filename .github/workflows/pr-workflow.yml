@@ -21,7 +21,7 @@ permissions:
 jobs:
   security-scan:
     name: 'Security Scan'
-    runs-on: ubuntu-latest
+    runs-on: macOS-latest
     outputs:
       checkov_status: ${{ steps.checkov.outcome }}
       checkov_failed_checks: ${{ steps.extract_results.outputs.failed_checks }}
